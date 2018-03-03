@@ -1,4 +1,6 @@
 open Ostap
+open GT
+open Language
 
 let parse infile =
   let s = Util.read infile in
@@ -8,7 +10,7 @@ let parse infile =
        inherit Util.Lexers.decimal s
        inherit Util.Lexers.ident ["read"; "write"] s
        inherit Util.Lexers.skip [
-	 Matcher.Skip.whitespaces " \t\n";
+	 Matcher.Skip.whitespaces " \t\r\n";
 	 Matcher.Skip.lineComment "--";
 	 Matcher.Skip.nestedComment "(*" "*)"
        ] s
@@ -30,7 +32,7 @@ let main =
          with End_of_file -> acc
        in
        let input = read [] in	
-       let output = 
+	   let output = 
 	 if interpret 
 	 then Language.eval prog input 
 	 else SM.run (SM.compile prog) input

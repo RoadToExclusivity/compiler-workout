@@ -4,6 +4,7 @@ open Language
 (* The type for the stack machine instructions *)
 @type insn =
 (* binary operator                 *) | BINOP of string
+(* put a constant on the stack     *) | CONST of int
 (* read to stack                   *) | READ
 (* write from stack                *) | WRITE
 (* load a variable to the stack    *) | LD    of string
@@ -23,7 +24,21 @@ type config = int list * Stmt.config
 
    Takes a configuration and a program, and returns a configuration as a result
  *)                         
-let eval _ = failwith "Not yet implemented"
+let rec eval c p = 
+	let update_config inst ((st, (s, i, o)) : config) = 
+		match inst with
+		  BINOP binop -> 
+			(match st with 
+				  y :: x :: st_end -> ((Language.Expr.calc binop x y) :: st_end, (s, i ,o)) 
+				| _ -> failwith "Not enough arguments for binary operation")
+		| CONST n -> (n :: st, (s, i, o))
+		| READ -> let num = List.hd i in (num :: st, (s, List.tl i, o))
+		| WRITE -> let num = List.hd st in (List.tl st, (s, i, o @ [num]))
+		| LD x -> ((s x) :: st, (s, i, o))
+		| ST x -> let num = List.hd st in (List.tl st, (Language.Expr.update x num s, i, o)) in
+	match p with
+	  [] -> c	
+	| inst :: tail -> eval (update_config inst c) tail;;
 
 (* Top-level evaluation
 
@@ -40,6 +55,17 @@ let run p i = let (_, (_, _, o)) = eval ([], (Expr.empty, i, [])) p in o
    Takes a program in the source language and returns an equivalent program for the
    stack machine
  *)
-let compile _ = failwith "Not yet implemented"
-
-                         
+let rec compile (stmt : Language.Stmt.t) =
+	let rec compile_expr (expr : Language.Expr.t) = 
+		match expr with
+		  Const n -> [CONST n]
+		| Var x -> [LD x]
+		| Binop (binop, x, y) -> 
+			let eval_x = compile_expr x
+			and eval_y = compile_expr y in
+			eval_x @ eval_y @ [BINOP binop] in
+	match stmt with
+	  Read x -> READ :: [ST x]
+	| Write expr -> (compile_expr expr) @ [WRITE]
+	| Assign (x, expr) -> (compile_expr expr) @ [ST x]
+	| Seq (stmt_left, stmt_right) -> (compile stmt_left) @ (compile stmt_right);;
