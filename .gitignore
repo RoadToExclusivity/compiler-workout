@@ -1,1 +1,8 @@
 *.log
+*.pdf
+*.gz
+*.o
+*.cmi
+*.cmx
+*.opt
+*.depend
