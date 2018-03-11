@@ -81,35 +81,30 @@ open SM
    of x86 instructions
 *)
 let rec compile env code =
+	let make_mov x y =
+		(match x, y with 
+		| M _, S _ | S _, S _ -> [Mov (x, edx); Mov (edx, y)]
+		| _, _ -> [Mov (x, y)]) in
 	let rec create_binop op x y = 
-		let make_binop op x y = [Mov (y, edx); Binop (op, x, edx)] in
-			(* (let code, reg = 
-				(match x, y with
-				| M _, S _ | S _, S _ -> [Mov (y, edx)], edx
-				| _, _ -> [], y) in
-			code @ [Mov (y, edx); Binop (op, x, edx)]) in *)
+		let logic_op op x y = [Mov (y, edx); Binop (op, x, edx)] in
 		(match op with
 		| "+" -> [Mov (x, eax); Binop ("+", y, eax)], eax
 		| "-" -> [Mov (x, eax); Binop ("-", y, eax)], eax
 		| "*" -> [Mov (x, eax); Binop ("*", y, eax)], eax
 		| "/" -> [Mov (x, eax); Cltd; IDiv y], eax
 		| "%" -> [Mov (x, eax); Cltd; IDiv y], edx
-		| ">" -> (make_binop "cmp" y x) @ [Mov (L 0, eax); Set ("g", "%al")], eax
-		| "<" -> (make_binop "cmp" x y) @ [Mov (L 0, eax); Set ("g", "%al")], eax
-		| ">=" -> (make_binop "cmp" y x) @ [Mov (L 0, eax); Set ("ge", "%al")], eax
-		| "<=" -> (make_binop "cmp" x y) @ [Mov (L 0, eax); Set ("ge", "%al")], eax
-		| "==" -> (make_binop "cmp" x y) @ [Mov (L 0, eax); Set ("e", "%al")], eax
-		| "!=" -> (make_binop "cmp" x y) @ [Mov (L 0, eax); Set ("ne", "%al")], eax
+		| ">" -> (logic_op "cmp" y x) @ [Mov (L 0, eax); Set ("g", "%al")], eax
+		| "<" -> (logic_op "cmp" x y) @ [Mov (L 0, eax); Set ("g", "%al")], eax
+		| ">=" -> (logic_op "cmp" y x) @ [Mov (L 0, eax); Set ("ge", "%al")], eax
+		| "<=" -> (logic_op "cmp" x y) @ [Mov (L 0, eax); Set ("ge", "%al")], eax
+		| "==" -> (logic_op "cmp" x y) @ [Mov (L 0, eax); Set ("e", "%al")], eax
+		| "!=" -> (logic_op "cmp" x y) @ [Mov (L 0, eax); Set ("ne", "%al")], eax
 		| "&&" -> 
 			let x_conv, reg_x = create_binop "!=" x (L 0)
 			and y_conv, reg_y = create_binop "!=" y (L 0) in
-			x_conv @ [Mov (reg_x, x)] @ y_conv @ [Mov (reg_y, y)] @ (make_binop "&&" x y) @ [Mov (L 0, eax); Set ("nz", "%al")], eax
-		| "!!" -> (make_binop "!!" x y) @ [Mov (L 0, eax); Set ("nz", "%al")], eax
+			x_conv @ [Mov (reg_x, x)] @ y_conv @ [Mov (reg_y, y)] @ (logic_op "&&" x y) @ [Mov (L 0, eax); Set ("nz", "%al")], eax
+		| "!!" -> (logic_op "!!" x y) @ [Mov (L 0, eax); Set ("nz", "%al")], eax
 		| _ -> failwith "Not implemented binary operator %s\n" @@ op) in
-	let make_mov x y =
-		(match x, y with 
-		| M _, S _ | S _, S _ -> [Mov (x, edx); Mov (edx, y)]
-		| _, _ -> [Mov (x, y)]) in
 	match code with
 	| [] -> (env, [])
 	| insn::rest ->
@@ -117,18 +112,18 @@ let rec compile env code =
 			(match insn with
 			| BINOP op -> 
 				let y, x, env = env#pop2 in
-				let e, env = env#allocate in
-				let new_ops, acc = create_binop op x y in
-				(env, new_ops @ [Mov (acc, e)])
+				let e, env = env#allocate
+				and new_ops, acc = create_binop op x y in
+				(env, new_ops @ (make_mov acc e))
 			| CONST n ->
 				let x, env = env#allocate in
-				(env, [Mov (L n, x)])
+				(env, make_mov (L n) x)
 			| READ ->
 				let e, env = env#allocate in
-				(env, [Call "_Lread"; Mov (eax, e)])
+				(env, [Call "Lread"] @ make_mov eax e)
 			| WRITE ->
 				let e, env = env#pop in
-				(env, [Push e; Call "_Lwrite"; Pop edx])
+				(env, [Push e; Call "Lwrite"; Pop edx])
 			| LD x ->
 				let e, env = env#allocate in
 				(env, make_mov (M (env#loc x)) e)
@@ -207,8 +202,8 @@ let genasm prog =
     )
     env#globals;
   Buffer.add_string asm "\t.text\n";
-  Buffer.add_string asm "\t.globl\t_main\n";
-  Buffer.add_string asm "_main:\n";
+  Buffer.add_string asm "\t.globl\tmain\n";
+  Buffer.add_string asm "main:\n";
   List.iter
     (fun i -> Buffer.add_string asm (Printf.sprintf "%s\n" @@ show i))
     code;
