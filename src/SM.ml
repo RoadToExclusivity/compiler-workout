@@ -28,7 +28,28 @@ type config = int list * Stmt.config
    Takes an environment, a configuration and a program, and returns a configuration as a result. The
    environment is used to locate a label to jump to (via method env#labeled <label_name>)
 *)                         
-let rec eval env conf prog = failwith "Not yet implemented"
+let rec eval env (st, (s, i, o)) prog =
+	match prog with
+	  [] -> (st, (s, i, o))
+	| inst :: tail -> 
+	  let cfg, next = 
+		  match inst with 
+		  | BINOP binop -> 
+				(match st with 
+					  y :: x :: st_end -> ((Language.Expr.calc binop x y) :: st_end, (s, i ,o)), tail
+					| _ -> failwith "Not enough arguments for binary operation")
+		  | CONST n -> (n :: st, (s, i, o)), tail
+		  | READ -> let num = List.hd i in (num :: st, (s, List.tl i, o)), tail
+		  | WRITE -> let num = List.hd st in (List.tl st, (s, i, o @ [num])), tail
+		  | LD x -> ((s x) :: st, (s, i, o)), tail
+		  | ST x -> let num = List.hd st in (List.tl st, (Language.Expr.update x num s, i, o)), tail
+		  | LABEL l -> (st, (s, i, o)), tail
+		  | JMP l -> (st, (s, i, o)), (env#labeled l)
+		  | CJMP (op, l) ->
+				let cmp = List.hd st in
+				let ret = if op = "z" && cmp = 0 || op == "nz" && cmp != 0 then (env#labeled l) else tail in
+				(List.tl st, (s, i, o)), ret in
+	  eval env cfg next
 
 (* Top-level evaluation
 
@@ -53,4 +74,47 @@ let run p i =
    Takes a program in the source language and returns an equivalent program for the
    stack machine
 *)
-let compile p = failwith "Not yet implemented"
+
+let compile (stmt : Language.Stmt.t) =
+	let label_creator =
+		object
+			val cur_val = 0
+			method get = "label_" ^ string_of_int cur_val, {< cur_val = cur_val + 1 >}
+		end in
+	let rec compile_expr (expr : Language.Expr.t) = 
+		match expr with
+		| Expr.Const n -> [CONST n]
+		| Expr.Var x -> [LD x]
+		| Expr.Binop (binop, x, y) -> compile_expr x @ compile_expr y @ [BINOP binop] in
+	let rec compile_label lbl stmt = 
+		match stmt with
+		  Stmt.Read x -> lbl, [READ; ST x]
+		| Stmt.Write expr -> lbl, (compile_expr expr) @ [WRITE]
+		| Stmt.Assign (x, expr) -> lbl, (compile_expr expr) @ [ST x]
+		| Stmt.Seq (stmt_left, stmt_right) ->
+			let lbl, left = compile_label lbl stmt_left in
+			let lbl, right = compile_label lbl stmt_right in
+			lbl, left @ right
+		| Stmt.Skip -> lbl, []
+		| Stmt.If (cond, t, f) ->
+			let flbl, lbl = lbl#get in
+			let endlbl, lbl = lbl#get in
+			let lbl, ift = compile_label lbl t in
+			let lbl, iff = compile_label lbl f in
+			let instr = 
+				match f with
+				| Skip -> [LABEL flbl]
+				| _ -> [JMP endlbl; LABEL flbl] @ iff @ [LABEL endlbl] in
+			lbl, (compile_expr cond) @ [CJMP ("z", flbl)] @ ift @ instr
+		| Stmt.While (cond, st) ->
+			let initlbl, lbl = lbl#get in
+			let endlbl, lbl = lbl#get in
+			let lbl, body = compile_label lbl st in
+			lbl, [LABEL initlbl] @ (compile_expr cond) @ [CJMP ("z", endlbl)] @ body @ [JMP initlbl; LABEL endlbl]
+		| Stmt.Repeat (cond, st) ->
+			let initlbl, lbl = lbl#get in
+			let lbl, body = compile_label lbl st in
+			lbl, [LABEL initlbl] @ body @ (compile_expr cond) @ [CJMP ("z", initlbl)]
+	in
+	let _, code = compile_label label_creator stmt
+	in code
