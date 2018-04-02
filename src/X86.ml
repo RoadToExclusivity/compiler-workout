@@ -105,10 +105,10 @@ let compile env code =
           match instr with
           | READ ->
              let s, env' = env#allocate in
-             (env', [Call "Lread"; Mov (eax, s)])               
+             (env', [Call "_Lread"; Mov (eax, s)])               
           | WRITE ->
              let s, env' = env#pop in
-             (env', [Push s; Call "Lwrite"; Pop eax])
+             (env', [Push s; Call "_Lwrite"; Pop eax])
   	  | CONST n ->
              let s, env' = env#allocate in
 	     (env', [Mov (L n, s)])               
@@ -265,8 +265,8 @@ let genasm prog =
     )
     env#globals;
   Buffer.add_string asm "\t.text\n";
-  Buffer.add_string asm "\t.globl\tmain\n";
-  Buffer.add_string asm "main:\n";
+  Buffer.add_string asm "\t.globl\t_main\n";
+  Buffer.add_string asm "_main:\n";
   List.iter
     (fun i -> Buffer.add_string asm (Printf.sprintf "%s\n" @@ show i))
     code;
