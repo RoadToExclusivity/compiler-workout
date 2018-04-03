@@ -66,8 +66,7 @@ module Expr =
        the given state.
     *)                                                       
     
-	let rec eval st expr =
-		let calc binop x y = 
+	let calc binop x y = 
 		   (let val_to_bool x = x <> 0
 			and logic_calc logic_op x y = if logic_op x y then 1 else 0 in
 			match binop with
@@ -84,7 +83,9 @@ module Expr =
 			| "!=" -> logic_calc (<>) x y
 			| "&&" -> logic_calc (&&) (val_to_bool x) (val_to_bool y)
 			| "!!" -> logic_calc (||) (val_to_bool x) (val_to_bool y)
-			| _ -> failwith "No such binary operator") in
+			| _ -> failwith "No such binary operator")
+	
+	let rec eval st expr =	
 		match expr with
 		| Const value -> value
 		| Var x -> State.eval st x
@@ -166,7 +167,7 @@ module Stmt =
 		| Repeat (stmt, cond) -> eval env conf (Seq (stmt, If (cond, Skip, Repeat (stmt, cond))))
 		| Call (proc, vals) -> 
 			let (params, local, stmt') = env#definition proc in
-			let new_scope = State.enter st local in
+			let new_scope = State.enter st (local @ params) in
 			let st' = List.fold_left2 (fun acc p v -> State.update p (Expr.eval st v) acc) new_scope params vals in
 			let (proc_st, i', o') = eval env (st', i, o) stmt' in
 			let old_scope = State.leave proc_st st in (old_scope, i', o');;
