@@ -173,7 +173,10 @@ let rec compile env code =
 module S = Set.Make (String)
 
 (* Environment implementation *)
-let make_assoc l = List.combine l (List.init (List.length l) (fun x -> x))
+let list_init len = function func -> 
+	let rec init' cur = if cur >= len then [] else [func cur] @ (init' (cur + 1)) in
+	init' 0
+let make_assoc l = List.combine l (list_init (List.length l) (fun x -> x))
                      
 class env =
   object (self)
