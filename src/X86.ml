@@ -84,9 +84,7 @@ let show instr =
 open SM
 
 (* Symbolic stack machine evaluator
-
      compile : env -> prg -> env * instr list
-
    Take an environment, a stack machine program, and returns a pair --- the updated environment and the list
    of x86 instructions
 *)
@@ -264,7 +262,10 @@ module S = Set.Make (String)
 module M = Map.Make (String)
 
 (* Environment implementation *)
-let make_assoc l = List.combine l (List.init (List.length l) (fun x -> x))
+let list_init len = function func -> 
+		let rec init' cur = if cur >= len then [] else [func cur] @ (init' (cur + 1)) in
+		init' 0
+let make_assoc l = List.combine l (list_init (List.length l) (fun x -> x))
                      
 class env =
   object (self)
@@ -372,4 +373,3 @@ let build prog name =
   close_out outf;
   let inc = try Sys.getenv "RC_RUNTIME" with _ -> "../runtime" in
   Sys.command (Printf.sprintf "gcc -m32 -o %s %s/runtime.o %s.s" name inc name)
- 
