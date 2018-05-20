@@ -35,7 +35,10 @@ module Value =
     | _ -> failwith "symbolic expression expected"
 
     let update_string s i x = String.init (String.length s) (fun j -> if j = i then x else s.[j])
-    let update_array  a i x = List.init   (List.length a)   (fun j -> if j = i then x else List.nth a j)
+	let list_init len = function func -> 
+		let rec init' cur = if cur >= len then [] else [func cur] @ (init' (cur + 1)) in
+		init' 0
+    let update_array  a i x = list_init   (List.length a)   (fun j -> if j = i then x else List.nth a j)
 
   end
        
